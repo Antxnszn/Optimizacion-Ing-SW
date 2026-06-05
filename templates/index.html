@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Buscador de Rutas</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0d0d0d;
+      --panel:    #141414;
+      --border:   #2a2a2a;
+      --accent:   #00e5ff;
+      --accent2:  #d500f9;
+      --text:     #e8e8e8;
+      --muted:    #666;
+      --error:    #ff4d4d;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+      overflow: hidden;
+    }
+
+    .app {
+      display: flex;
+      height: 100vh;
+      width: 100vw;
+    }
+
+    /* ── PANEL IZQUIERDO ── */
+    .panel {
+      width: 340px;
+      min-width: 340px;
+      background: var(--panel);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 32px 28px;
+      gap: 28px;
+      overflow-y: auto;
+    }
+
+    .logo {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .logo-tag {
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      color: var(--accent);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+    }
+
+    .logo h1 {
+      font-size: 26px;
+      font-weight: 800;
+      line-height: 1.1;
+      color: var(--text);
+    }
+
+    .logo h1 span {
+      color: var(--accent);
+    }
+
+    .divider {
+      height: 1px;
+      background: var(--border);
+    }
+
+    .hint-box {
+      background: #1a1a1a;
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      padding: 14px 16px;
+      border-radius: 4px;
+    }
+
+    .hint-box p {
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    .hint-box p strong {
+      color: var(--accent);
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    label {
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .input-wrap {
+      position: relative;
+    }
+
+    .dot {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      pointer-events: none;
+    }
+
+    .dot.origen { background: var(--accent); }
+    .dot.destino { background: var(--accent2); }
+    .dot.origen { background: #ffea00; }
+    .dot.destino { background: #d500f9; }
+
+    input[type="text"] {
+      width: 100%;
+      background: #1c1c1c;
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+      font-size: 14px;
+      padding: 12px 14px 12px 34px;
+      border-radius: 6px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input[type="text"]:focus {
+      border-color: var(--accent);
+    }
+
+    input[type="text"]::placeholder {
+      color: #444;
+      font-size: 13px;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 14px;
+      background: var(--accent);
+      color: #0d0d0d;
+      border: none;
+      border-radius: 6px;
+      font-family: 'Space Mono', monospace;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+
+    .btn:hover { opacity: 0.9; }
+    .btn:active { transform: scale(0.98); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* estado */
+    .status {
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      line-height: 1.6;
+      min-height: 40px;
+      color: var(--muted);
+    }
+
+    .status.loading { color: var(--accent); }
+    .status.error   { color: var(--error); }
+    .status.success { color: var(--accent2); }
+
+    .info-box {
+      background: #1a1a1a;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 16px;
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .info-box.visible { display: flex; }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .info-label {
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    .info-value {
+      font-family: 'Space Mono', monospace;
+      font-size: 13px;
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    /* ── MAPA ── */
+    .map-wrap {
+      flex: 1;
+      position: relative;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+    }
+
+    .map-overlay {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      padding: 8px 14px;
+      border-radius: 4px;
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 1px;
+      z-index: 999;
+    }
+
+    /* loader spinner */
+    .spinner {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border: 2px solid var(--accent);
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Panel izquierdo -->
+  <aside class="panel">
+
+    <div class="logo">
+      <span class="logo-tag">A* Pathfinding</span>
+      <h1>Busca<br>tu <span>Ruta</span></h1>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="hint-box">
+      <p>
+        Escribe una direccion, colonia o lugar.<br><br>
+        <strong>Ejemplo:</strong><br>
+        Origen: Plaza Satelite, Naucalpan<br>
+        Destino: Unidad Profesional Adolfo Lopez Mateos, CDMX<br><br>
+      </p>
+    </div>
+
+    <div class="form-group">
+      <div class="field">
+        <label>Origen</label>
+        <div class="input-wrap">
+          <span class="dot origen"></span>
+          <input type="text" id="origen" placeholder="Ej: Plaza Satelite, Naucalpan"/>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Destino</label>
+        <div class="input-wrap">
+          <span class="dot destino"></span>
+          <input type="text" id="destino" placeholder="Ej: IPN, Zacatenco"/>
+        </div>
+      </div>
+
+      <button class="btn" id="btnBuscar" onclick="buscarRuta()">Calcular Ruta</button>
+    </div>
+
+    <div class="status" id="status">Ingresa origen y destino para comenzar.</div>
+
+    <div class="info-box" id="infoBox">
+      <div class="info-row">
+        <span class="info-label">Nodos en ruta</span>
+        <span class="info-value" id="infoNodos">—</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Distancia aprox.</span>
+        <span class="info-value" id="infoDistancia">—</span>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- Mapa -->
+  <div class="map-wrap">
+    <div class="map-overlay">OpenStreetMap + A*</div>
+    <div id="map"></div>
+  </div>
+
+</div>
+
+<script>
+  // Inicializar mapa centrado en CDMX
+  const map = L.map('map').setView([19.47, -99.20], 12);
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap &copy; CARTO',
+    maxZoom: 19
+  }).addTo(map);
+
+  let rutaLayer = null;
+  let marcadores = [];
+
+  function setStatus(msg, tipo = '') {
+    const el = document.getElementById('status');
+    el.className = 'status ' + tipo;
+    el.innerHTML = msg;
+  }
+
+  function limpiarMapa() {
+    if (rutaLayer) { map.removeLayer(rutaLayer); rutaLayer = null; }
+    marcadores.forEach(m => map.removeLayer(m));
+    marcadores = [];
+  }
+
+  async function buscarRuta() {
+    const origen  = document.getElementById('origen').value.trim();
+    const destino = document.getElementById('destino').value.trim();
+
+    if (!origen || !destino) {
+      setStatus('Por favor ingresa origen y destino.', 'error');
+      return;
+    }
+
+    limpiarMapa();
+    document.getElementById('btnBuscar').disabled = true;
+    document.getElementById('infoBox').classList.remove('visible');
+    setStatus('<span class="spinner"></span>Geocodificando lugares...', 'loading');
+
+    try {
+      const res = await fetch('/ruta', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ origen, destino })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        setStatus('Error: ' + (data.error || 'No se pudo calcular la ruta.'), 'error');
+        return;
+      }
+
+      // Dibujar ruta
+      const coords = data.ruta.map(p => [p[0], p[1]]);
+
+      rutaLayer = L.polyline(coords, {
+        color: '#00e5ff',
+        weight: 5,
+        opacity: 0.9
+      }).addTo(map);
+
+      // Marcador origen
+      const iconOrigen = L.divIcon({
+        className: '',
+        html: '<div style="width:14px;height:14px;background:#ffea00;border-radius:50%;border:2px solid #0d0d0d;"></div>',
+        iconSize: [14, 14],
+        iconAnchor: [7, 7]
+      });
+
+      // Marcador destino
+      const iconDestino = L.divIcon({
+        className: '',
+        html: '<div style="width:14px;height:14px;background:#d500f9;border-radius:50%;border:2px solid #0d0d0d;"></div>',
+        iconSize: [14, 14],
+        iconAnchor: [7, 7]
+      });
+
+      marcadores.push(L.marker(coords[0], { icon: iconOrigen }).addTo(map));
+      marcadores.push(L.marker(coords[coords.length - 1], { icon: iconDestino }).addTo(map));
+
+      map.fitBounds(rutaLayer.getBounds(), { padding: [40, 40] });
+
+      // Info
+      const distancia = (data.distancia_m / 1000).toFixed(2);
+      document.getElementById('infoNodos').textContent = data.nodos;
+      document.getElementById('infoDistancia').textContent = distancia + ' km';
+      document.getElementById('infoBox').classList.add('visible');
+
+      setStatus('Ruta calculada con A* correctamente.', 'success');
+
+    } catch (err) {
+      setStatus('Error de conexion con el servidor.', 'error');
+    } finally {
+      document.getElementById('btnBuscar').disabled = false;
+    }
+  }
+
+  // Buscar con Enter
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter') buscarRuta();
+  });
+</script>
+</body>
+</html>
